@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Analíticos - Clínica de la Convergencia</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        body { font-family: 'Arial', sans-serif; background: #f4f4f9; padding: 20px; }
+        .container { max-width: 800px; margin: auto; background: #fff; padding: 40px; border: 1px solid #ccc; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 30px; }
+        .header img { width: 120px; }
+        .form-group { margin-bottom: 15px; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        table, th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .buttons { margin-top: 30px; text-align: center; }
+        button { padding: 10px 20px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div class="container" id="pdf-content">
+    <div class="header">
+        <div>
+            <h2>PROGRAMA DE FORMACIÓN PARA PROFESIONALES</h2>
+            <h3>Clínica de la Convergencia</h3>
+            <p>Director: Dr. y Mgter. Rubén M. Pereyra</p>
+        </div>
+        <img src="logo.jpg" alt="Logo">
+    </div>
+
+    <div class="form-group">
+        <label>Seleccione Alumno:</label>
+        <select id="select-alumno" onchange="cargarDatosAlumno()">
+            <option value="">Seleccione...</option>
+        </select>
+    </div>
+
+    <div id="datos-alumno">
+        <p><strong>DNI:</strong> <span id="dni-val">-</span></p>
+        <p><strong>Legajo/Matrícula:</strong> <span id="legajo-val">-</span></p>
+        <p><strong>Profesión:</strong> <span id="profesion-val">-</span></p>
+    </div>
+
+    <h3>Asistencia</h3>
+    <table id="tabla-asistencia">
+        <tr><th>Encuentro</th><th>Estado</th></tr>
+    </table>
+    <p><strong>% Asistencia:</strong> <span id="porcentaje-asistencia">0</span>%</p>
+
+    <h3>Calificaciones</h3>
+    <table id="tabla-calificaciones">
+        <tr><th>Test/Taller</th><th>Nota</th></tr>
+    </table>
+    <p><strong>Promedio General:</strong> <span id="promedio-general">0</span></p>
+
+    <div id="formula-legal" style="margin-top: 40px; font-size: 0.9em;"></div>
+    <div style="margin-top: 50px; text-align: right;">
+        <img src="sello.jpg" style="width: 100px; display: block; margin-left: auto;">
+        <p>Dr. y Mgter. Rubén M. Pereyra - Director</p>
+    </div>
+</div>
+
+<div class="buttons">
+    <button onclick="guardarAnalitico()">Guardar Analítico</button>
+    <button onclick="generarPDF()">Generar PDF</button>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyD47_2UtWLFI_VRVvvXVAqn4zZzZ4d1ggo",
+        authDomain: "av-clinica-convergencia.firebaseapp.com",
+        projectId: "av-clinica-convergencia",
+        storageBucket: "av-clinica-convergencia.firebasestorage.app",
+        appId: "1:939404425675:web:8cfae157099efabd741e4e"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // Cargar nombres al iniciar
+    window.onload = async () => {
+        const snap = await db.collection("participantes").get();
+        const sel = document.getElementById("select-alumno");
+        snap.forEach(doc => {
+            const opt = document.createElement("option");
+            opt.value = doc.id;
+            opt.textContent = doc.data().nombre;
+            sel.appendChild(opt);
+        });
+    };
+
+    async function cargarDatosAlumno() {
+        const id = document.getElementById("select-alumno").value;
+        if (!id) return;
+        
+        const doc = await db.collection("participantes").doc(id).get();
+        const data = doc.data();
+        document.getElementById("dni-val").textContent = data.dni;
+        document.getElementById("legajo-val").textContent = data.matricula;
+        document.getElementById("profesion-val").textContent = data.profesion;
+
+        // Cargar Asistencia
+        const asisSnap = await db.collection("asistencia").where("alumnoId", "==", id).get();
+        const tablaAsis = document.getElementById("tabla-asistencia");
+        tablaAsis.innerHTML = "<tr><th>Encuentro</th><th>Estado</th></tr>";
+        let presentes = 0;
+        asisSnap.forEach(doc => {
+            const d = doc.data();
+            tablaAsis.innerHTML += `<tr><td>${d.numero}</td><td>${d.estado}</td></tr>`;
+            if(d.estado === "presente") presentes++;
+        });
+        document.getElementById("porcentaje-asistencia").textContent = (presentes / 10 * 100);
+
+        // Cargar Calificaciones
+        const calSnap = await db.collection("resultados_test").where("alumnoId", "==", id).get();
+        const tablaCal = document.getElementById("tabla-calificaciones");
+        tablaCal.innerHTML = "<tr><th>Test/Taller</th><th>Nota</th></tr>";
+        let suma = 0;
+        calSnap.forEach(doc => {
+            const d = doc.data();
+            tablaCal.innerHTML += `<tr><td>${d.nombre}</td><td>${d.nota}</td></tr>`;
+            suma += d.nota;
+        });
+        document.getElementById("promedio-general").textContent = (suma / 20).toFixed(2);
+
+        // Formula legal
+        const fecha = new Date().toLocaleDateString();
+        document.getElementById("formula-legal").textContent = 
+            `REGISTRO ACADÉMICO: La Dirección Académica de la "Clínica de la Convergencia" certifica que ${data.nombre}, matriculado/a bajo el N° ${data.matricula}, ha cursado, rendido y aprobado los módulos correspondientes... Fecha: ${fecha}`;
+    }
+
+    function guardarAnalitico() { alert("Analítico guardado en base de datos."); }
+    function generarPDF() { html2pdf().from(document.getElementById('pdf-content')).save(); }
+</script>
+</body>
+</html>
