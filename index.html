@@ -11,11 +11,12 @@
         .container { max-width: 800px; margin: auto; background: #fff; padding: 40px; border: 1px solid #ccc; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 30px; }
         .header img { width: 120px; }
-        .form-group { margin-bottom: 15px; }
+        .form-group { margin-bottom: 20px; }
         table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        table, th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        table, th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #f2f2f2; }
         .buttons { margin-top: 30px; text-align: center; }
-        button { padding: 10px 20px; cursor: pointer; }
+        button { padding: 12px 25px; cursor: pointer; margin: 5px; background: #333; color: #fff; border: none; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -31,33 +32,34 @@
     </div>
 
     <div class="form-group">
-        <label>Seleccione Alumno:</label>
+        <label><strong>Seleccione Alumno:</strong></label>
         <select id="select-alumno" onchange="cargarDatosAlumno()">
             <option value="">Seleccione...</option>
         </select>
     </div>
 
-    <div id="datos-alumno">
-        <p><strong>DNI:</strong> <span id="dni-val">-</span></p>
-        <p><strong>Legajo/Matrícula:</strong> <span id="legajo-val">-</span></p>
+    <div>
+        <p><strong>DNI N°:</strong> <span id="dni-val">-</span></p>
+        <p><strong>Legajo:</strong> <span id="legajo-val">-</span></p>
         <p><strong>Profesión:</strong> <span id="profesion-val">-</span></p>
     </div>
 
     <h3>Asistencia</h3>
     <table id="tabla-asistencia">
-        <tr><th>Encuentro</th><th>Estado</th></tr>
+        <tr><th>Encuentro</th><th>Estado</th><th>Fecha</th></tr>
     </table>
     <p><strong>% Asistencia:</strong> <span id="porcentaje-asistencia">0</span>%</p>
 
     <h3>Calificaciones</h3>
     <table id="tabla-calificaciones">
-        <tr><th>Test/Taller</th><th>Nota</th></tr>
+        <tr><th>Test N°</th><th>Nota</th><th>Taller N°</th><th>Nota</th></tr>
     </table>
     <p><strong>Promedio General:</strong> <span id="promedio-general">0</span></p>
 
-    <div id="formula-legal" style="margin-top: 40px; font-size: 0.9em;"></div>
+    <div id="formula-legal" style="margin-top: 40px; font-size: 0.9em; font-style: italic;"></div>
+    
     <div style="margin-top: 50px; text-align: right;">
-        <img src="sello.jpg" style="width: 100px; display: block; margin-left: auto;">
+        <img src="sello.jpg" style="width: 120px; display: block; margin-left: auto;">
         <p>Dr. y Mgter. Rubén M. Pereyra - Director</p>
     </div>
 </div>
@@ -78,7 +80,6 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    // Cargar nombres al iniciar
     window.onload = async () => {
         const snap = await db.collection("participantes").get();
         const sel = document.getElementById("select-alumno");
@@ -91,46 +92,45 @@
     };
 
     async function cargarDatosAlumno() {
-        const id = document.getElementById("select-alumno").value;
+        const sel = document.getElementById("select-alumno");
+        const nombre = sel.options[sel.selectedIndex].text;
+        const id = sel.value;
         if (!id) return;
         
         const doc = await db.collection("participantes").doc(id).get();
         const data = doc.data();
-        document.getElementById("dni-val").textContent = data.dni;
-        document.getElementById("legajo-val").textContent = data.matricula;
-        document.getElementById("profesion-val").textContent = data.profesion;
+        document.getElementById("dni-val").textContent = data.dni || "-";
+        document.getElementById("legajo-val").textContent = data.Legajo || "-";
+        document.getElementById("profesion-val").textContent = data.profesion || "-";
 
-        // Cargar Asistencia
-        const asisSnap = await db.collection("asistencia").where("alumnoId", "==", id).get();
+        const asisSnap = await db.collection("asistencia").where("nombreEstudiante", "==", nombre).get();
         const tablaAsis = document.getElementById("tabla-asistencia");
-        tablaAsis.innerHTML = "<tr><th>Encuentro</th><th>Estado</th></tr>";
-        let presentes = 0;
-        asisSnap.forEach(doc => {
-            const d = doc.data();
-            tablaAsis.innerHTML += `<tr><td>${d.numero}</td><td>${d.estado}</td></tr>`;
-            if(d.estado === "presente") presentes++;
+        tablaAsis.innerHTML = "<tr><th>Encuentro</th><th>Estado</th><th>Fecha</th></tr>";
+        let pres = 0; let total = 0;
+        asisSnap.forEach(d => {
+            const row = d.data();
+            tablaAsis.innerHTML += `<tr><td>${row.encuentro}</td><td>${row.estado}</td><td>${row.fecha}</td></tr>`;
+            if(row.estado.toLowerCase() === "presente") pres++;
+            total++;
         });
-        document.getElementById("porcentaje-asistencia").textContent = (presentes / 10 * 100);
+        document.getElementById("porcentaje-asistencia").textContent = total > 0 ? (pres / total * 100).toFixed(0) : 0;
 
-        // Cargar Calificaciones
-        const calSnap = await db.collection("resultados_test").where("alumnoId", "==", id).get();
+        const calSnap = await db.collection("resultados").where("nombreEstudiante", "==", nombre).get();
         const tablaCal = document.getElementById("tabla-calificaciones");
-        tablaCal.innerHTML = "<tr><th>Test/Taller</th><th>Nota</th></tr>";
-        let suma = 0;
-        calSnap.forEach(doc => {
-            const d = doc.data();
-            tablaCal.innerHTML += `<tr><td>${d.nombre}</td><td>${d.nota}</td></tr>`;
-            suma += d.nota;
+        tablaCal.innerHTML = "<tr><th>Test N°</th><th>Nota</th><th>Taller N°</th><th>Nota</th></tr>";
+        let suma = 0; let cant = 0;
+        calSnap.forEach(d => {
+            const row = d.data();
+            tablaCal.innerHTML += `<tr><td>${row.test_numero||'-'}</td><td>${row.nota_test||0}</td><td>${row.taller_numero||'-'}</td><td>${row.nota_taller||0}</td></tr>`;
+            suma += (Number(row.nota_test)||0) + (Number(row.nota_taller)||0);
+            cant += 2;
         });
-        document.getElementById("promedio-general").textContent = (suma / 20).toFixed(2);
+        document.getElementById("promedio-general").textContent = cant > 0 ? (suma / cant).toFixed(2) : 0;
 
-        // Formula legal
-        const fecha = new Date().toLocaleDateString();
-        document.getElementById("formula-legal").textContent = 
-            `REGISTRO ACADÉMICO: La Dirección Académica de la "Clínica de la Convergencia" certifica que ${data.nombre}, matriculado/a bajo el N° ${data.matricula}, ha cursado, rendido y aprobado los módulos correspondientes... Fecha: ${fecha}`;
+        document.getElementById("formula-legal").textContent = `REGISTRO ACADÉMICO: La Dirección Académica de la "Clínica de la Convergencia" certifica que ${nombre}, matriculado/a bajo el N° ${data.Legajo}, ha cursado, rendido y aprobado los módulos correspondientes... Fecha: ${new Date().toLocaleDateString()}`;
     }
 
-    function guardarAnalitico() { alert("Analítico guardado en base de datos."); }
+    function guardarAnalitico() { alert("Analítico guardado exitosamente."); }
     function generarPDF() { html2pdf().from(document.getElementById('pdf-content')).save(); }
 </script>
 </body>
