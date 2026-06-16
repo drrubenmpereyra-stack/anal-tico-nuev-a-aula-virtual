@@ -51,7 +51,7 @@
 
     <h3>Calificaciones</h3>
     <table id="tabla-calificaciones">
-        <tr><th>Test N°</th><th>Nota</th><th>Taller N°</th><th>Nota</th></tr>
+        <tr><th>Test N°</th><th>Nota</th></tr>
     </table>
     <p><strong>Promedio General:</strong> <span id="promedio-general">0</span></p>
 
@@ -96,49 +96,42 @@
         const id = sel.value;
         if (!id) return;
         
+        // 1. Datos personales
         const doc = await db.collection("participantes").doc(id).get();
         const data = doc.data();
-        document.getElementById("dni-val").textContent = data.dni || data.DNI || "-";
-        document.getElementById("legajo-val").textContent = data.legajo || data.Legajo || "-";
+        document.getElementById("dni-val").textContent = data.dni || "-";
+        document.getElementById("legajo-val").textContent = data.legajo || "-";
         document.getElementById("profesion-val").textContent = data.profesion || "-";
 
-        // Asistencia
+        // 2. Asistencia
         const asisSnap = await db.collection("asistencia").where("nombreEstudiante", "==", nombreCompleto).get();
         const tablaAsis = document.getElementById("tabla-asistencia");
         tablaAsis.innerHTML = "<tr><th>Encuentro</th><th>Estado</th><th>Fecha</th></tr>";
         let pres = 0; let total = 0;
         asisSnap.forEach(d => {
             const r = d.data();
-            tablaAsis.innerHTML += `<tr><td>${r.encuentro||'-'}</td><td>${r.estado||'-'}</td><td>${r.fecha||'-'}</td></tr>`;
+            tablaAsis.innerHTML += `<tr><td>${r.encuentro || '-'}</td><td>${r.estado || '-'}</td><td>${r.fecha || '-'}</td></tr>`;
             if(r.estado && r.estado.toLowerCase() === "presente") pres++;
             total++;
         });
         document.getElementById("porcentaje-asistencia").textContent = total > 0 ? ((pres / total) * 100).toFixed(0) : 0;
 
-        // Calificaciones: Búsqueda flexible en colecciones "resultados" y "resultados_test"
-        const colecciones = ["resultados", "resultados_test"];
+        // 3. Calificaciones (Colección resultados_test usando el campo "nombre")
         const tablaCal = document.getElementById("tabla-calificaciones");
-        tablaCal.innerHTML = "<tr><th>Test N°</th><th>Nota</th><th>Taller N°</th><th>Nota</th></tr>";
+        tablaCal.innerHTML = "<tr><th>Test N°</th><th>Nota</th></tr>";
         let suma = 0; let cant = 0;
 
-        for (const col of colecciones) {
-            const snap = await db.collection(col).where("nombreEstudiante", "==", nombreCompleto).get();
-            snap.forEach(d => {
-                const r = d.data();
-                const tNum = r.test_numero || r.Test_numero || '-';
-                const tNota = r.nota || r.Nota || 0;
-                const tNumTaller = r.taller_numero || r.Taller_numero || '-';
-                const tNotaTaller = r.nota_taller || r.Nota_taller || 0;
-
-                tablaCal.innerHTML += `<tr><td>${tNum}</td><td>${tNota}</td><td>${tNumTaller}</td><td>${tNotaTaller}</td></tr>`;
-                if(r.nota || r.Nota) { suma += Number(tNota); cant++; }
-                if(r.nota_taller || r.Nota_taller) { suma += Number(tNotaTaller); cant++; }
-            });
-        }
+        const resSnap = await db.collection("resultados_test").where("nombre", "==", nombreCompleto).get();
+        resSnap.forEach(d => {
+            const r = d.data();
+            tablaCal.innerHTML += `<tr><td>${r.Test_numero || '-'}</td><td>${r.nota || '0'}</td></tr>`;
+            suma += Number(r.nota) || 0;
+            cant++;
+        });
         document.getElementById("promedio-general").textContent = cant > 0 ? (suma / cant).toFixed(2) : 0;
 
-        // Formula
-        document.getElementById("formula-legal").textContent = `REGISTRO ACADÉMICO: La Dirección Académica de la "Clínica de la Convergencia" certifica que ${nombreCompleto}, matriculado/a bajo el N° ${data.legajo || data.Legajo || '-'}, ha cursado, rendido y aprobado los módulos correspondientes... Fecha: ${new Date().toLocaleDateString('es-AR')}`;
+        // 4. Formula legal
+        document.getElementById("formula-legal").textContent = `REGISTRO ACADÉMICO: La Dirección Académica de la "Clínica de la Convergencia" certifica que ${nombreCompleto}, matriculado/a bajo el N° ${data.legajo || '-'}, ha cursado, rendido y aprobado los módulos correspondientes... Fecha: ${new Date().toLocaleDateString('es-AR')}`;
     }
 
     function guardarAnalitico() { alert("Analítico guardado."); }
