@@ -33,7 +33,7 @@
     <div class="form-group">
         <label><strong>Seleccione Alumno:</strong></label>
         <select id="select-alumno" onchange="cargarDatosAlumno()">
-            <option value="">Cargando alumnos...</option>
+            <option value="">Seleccione un alumno...</option>
         </select>
     </div>
 
@@ -42,21 +42,23 @@
         <p><strong>Legajo:</strong> <span id="legajo-val">-</span></p>
         <p><strong>Profesión:</strong> <span id="profesion-val">-</span></p>
     </div>
+
     <h3>Asistencia</h3>
     <table id="tabla-asistencia"><tr><th>Encuentro</th><th>Estado</th><th>Fecha</th></tr></table>
     <p><strong>% Asistencia:</strong> <span id="porcentaje-asistencia">0</span>%</p>
+
     <h3>Calificaciones</h3>
     <table id="tabla-calificaciones"><tr><th>Test N°</th><th>Nota</th></tr></table>
     <p><strong>Promedio General:</strong> <span id="promedio-general">0</span></p>
+
     <div id="formula-legal" style="margin-top: 40px; font-size: 0.9em; font-style: italic;"></div>
+    
     <div style="margin-top: 50px; text-align: right;">
         <img src="sello.jpg" style="width: 120px; display: block; margin-left: auto;">
-        <p>Dr. y Mgter. Rubén M. Pereyra - Director Programa Clínica de la Convergencia</p>
     </div>
 </div>
 
 <div class="buttons">
-    <button onclick="guardarAnalitico()">Guardar Analítico</button>
     <button onclick="generarPDF()">Generar PDF</button>
 </div>
 
@@ -68,47 +70,50 @@
         storageBucket: "av-clinica-convergencia.firebasestorage.app",
         appId: "1:939404425675:web:8cfae157099efabd741e4e"
     };
+    
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    // Cargador blindado
-    window.onload = async () => {
+    // Inicialización de alumnos
+    document.addEventListener("DOMContentLoaded", async () => {
+        console.log("Cargando alumnos...");
         try {
-            console.log("Iniciando carga de alumnos...");
             const snap = await db.collection("participantes").get();
             const sel = document.getElementById("select-alumno");
-            sel.innerHTML = '<option value="">Seleccione...</option>';
             snap.forEach(doc => {
+                const data = doc.data();
                 const opt = document.createElement("option");
                 opt.value = doc.id;
-                opt.textContent = doc.data().nombre || "Sin nombre";
+                opt.textContent = data.nombre || "Sin nombre";
                 sel.appendChild(opt);
             });
-            console.log("Alumnos cargados correctamente.");
-        } catch (error) {
-            console.error("ERROR AL CARGAR ALUMNOS:", error);
-            document.getElementById("select-alumno").innerHTML = '<option value="">Error de conexión</option>';
+            console.log("Carga completada.");
+        } catch (e) {
+            console.error("Error al conectar:", e);
         }
-    };
+    });
 
     async function cargarDatosAlumno() {
         const sel = document.getElementById("select-alumno");
         const nombreCompleto = sel.options[sel.selectedIndex].text;
-        const nombreUpper = nombreCompleto.toUpperCase();
         const id = sel.value;
         if (!id) return;
         
+        // Carga participante
         const doc = await db.collection("participantes").doc(id).get();
         const data = doc.data();
         document.getElementById("dni-val").textContent = data.dni || data.DNI || "-";
         document.getElementById("legajo-val").textContent = data.legajo || data.Legajo || "-";
         document.getElementById("profesion-val").textContent = data.profesion || "-";
 
+        // Asistencia y Calificaciones
+        const nombreUpper = nombreCompleto.toUpperCase();
+        
         // Asistencia
         const tablaAsis = document.getElementById("tabla-asistencia");
         tablaAsis.innerHTML = "<tr><th>Encuentro</th><th>Estado</th><th>Fecha</th></tr>";
         const asisSnap = await db.collection("asistencia").get();
-        let pres = 0; let total = 0;
+        let pres = 0, total = 0;
         asisSnap.forEach(d => {
             const r = d.data();
             if (r.nombreEstudiante && r.nombreEstudiante.toUpperCase() === nombreUpper) {
@@ -119,10 +124,10 @@
         });
         document.getElementById("porcentaje-asistencia").textContent = total > 0 ? ((pres / total) * 100).toFixed(0) : 0;
 
-        // Calificaciones
+        // Notas
         const tablaCal = document.getElementById("tabla-calificaciones");
         tablaCal.innerHTML = "<tr><th>Test N°</th><th>Nota</th></tr>";
-        let suma = 0; let cant = 0;
+        let suma = 0, cant = 0;
         const resSnap = await db.collection("resultados_test").get();
         resSnap.forEach(d => {
             const r = d.data();
@@ -133,11 +138,10 @@
             }
         });
         document.getElementById("promedio-general").textContent = cant > 0 ? (suma / cant).toFixed(2) : 0;
-
+        
         document.getElementById("formula-legal").textContent = `REGISTRO ACADÉMICO: La Dirección Académica de la "Clínica de la Convergencia" certifica que ${nombreCompleto}, matriculado/a bajo el N° ${data.legajo || data.Legajo || '-'}, ha cursado, rendido y aprobado los módulos correspondientes... Fecha: ${new Date().toLocaleDateString('es-AR')}`;
     }
 
-    function guardarAnalitico() { alert("Analítico guardado."); }
     function generarPDF() { html2pdf().from(document.getElementById('pdf-content')).save(); }
 </script>
 </body>
