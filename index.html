@@ -47,8 +47,8 @@
     <table id="tabla-asistencia"><tr><th>Encuentro</th><th>Estado</th><th>Fecha</th></tr></table>
     <p><strong>% Asistencia:</strong> <span id="porcentaje-asistencia">0</span>%</p>
 
-    <h3>Calificaciones</h3>
-    <table id="tabla-calificaciones"><tr><th>Test N°</th><th>Nota</th></tr></table>
+    <h3>Calificaciones y Talleres</h3>
+    <table id="tabla-calificaciones"><tr><th>Actividad</th><th>Nota</th></tr></table>
     <p><strong>Promedio General:</strong> <span id="promedio-general">0</span></p>
 
     <div id="formula-legal" style="margin-top: 40px; font-size: 0.9em; font-style: italic;"></div>
@@ -58,9 +58,7 @@
     </div>
 </div>
 
-<div class="buttons">
-    <button onclick="generarPDF()">Generar PDF</button>
-</div>
+<div class="buttons"><button onclick="generarPDF()">Generar PDF</button></div>
 
 <script>
     const firebaseConfig = {
@@ -70,46 +68,34 @@
         storageBucket: "av-clinica-convergencia.firebasestorage.app",
         appId: "1:939404425675:web:8cfae157099efabd741e4e"
     };
-    
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    // Inicialización de alumnos
     document.addEventListener("DOMContentLoaded", async () => {
-        console.log("Cargando alumnos...");
-        try {
-            const snap = await db.collection("participantes").get();
-            const sel = document.getElementById("select-alumno");
-            snap.forEach(doc => {
-                const data = doc.data();
-                const opt = document.createElement("option");
-                opt.value = doc.id;
-                opt.textContent = data.nombre || "Sin nombre";
-                sel.appendChild(opt);
-            });
-            console.log("Carga completada.");
-        } catch (e) {
-            console.error("Error al conectar:", e);
-        }
+        const snap = await db.collection("participantes").get();
+        const sel = document.getElementById("select-alumno");
+        snap.forEach(doc => {
+            const opt = document.createElement("option");
+            opt.value = doc.id;
+            opt.textContent = doc.data().nombre || "Sin nombre";
+            sel.appendChild(opt);
+        });
     });
 
     async function cargarDatosAlumno() {
         const sel = document.getElementById("select-alumno");
         const nombreCompleto = sel.options[sel.selectedIndex].text;
+        const nombreUpper = nombreCompleto.toUpperCase();
         const id = sel.value;
         if (!id) return;
         
-        // Carga participante
         const doc = await db.collection("participantes").doc(id).get();
         const data = doc.data();
-        document.getElementById("dni-val").textContent = data.dni || data.DNI || "-";
-        document.getElementById("legajo-val").textContent = data.legajo || data.Legajo || "-";
+        document.getElementById("dni-val").textContent = data.dni || "-";
+        document.getElementById("legajo-val").textContent = data.legajo || "-";
         document.getElementById("profesion-val").textContent = data.profesion || "-";
 
-        // Asistencia y Calificaciones
-        const nombreUpper = nombreCompleto.toUpperCase();
-        
-        // Asistencia
+        // Cargar Asistencia
         const tablaAsis = document.getElementById("tabla-asistencia");
         tablaAsis.innerHTML = "<tr><th>Encuentro</th><th>Estado</th><th>Fecha</th></tr>";
         const asisSnap = await db.collection("asistencia").get();
@@ -124,22 +110,35 @@
         });
         document.getElementById("porcentaje-asistencia").textContent = total > 0 ? ((pres / total) * 100).toFixed(0) : 0;
 
-        // Notas
+        // Cargar Calificaciones (Tests + Talleres)
         const tablaCal = document.getElementById("tabla-calificaciones");
-        tablaCal.innerHTML = "<tr><th>Test N°</th><th>Nota</th></tr>";
+        tablaCal.innerHTML = "<tr><th>Actividad</th><th>Nota</th></tr>";
         let suma = 0, cant = 0;
+
+        // 1. Tests
         const resSnap = await db.collection("resultados_test").get();
         resSnap.forEach(d => {
             const r = d.data();
             if (r.nombre && r.nombre.toUpperCase() === nombreUpper) {
-                tablaCal.innerHTML += `<tr><td>${r.Test_numero || '-'}</td><td>${r.nota || '0'}</td></tr>`;
-                suma += Number(r.nota) || 0;
-                cant++;
+                const notaVal = parseFloat(r.nota) || 0;
+                tablaCal.innerHTML += `<tr><td>Test: ${r.Test_numero || 'N/A'}</td><td>${notaVal}</td></tr>`;
+                suma += notaVal; cant++;
             }
         });
+
+        // 2. Talleres (Colección resultados_talleres)
+        const talSnap = await db.collection("resultados_talleres").get();
+        talSnap.forEach(d => {
+            const r = d.data();
+            if (r.alumno && r.alumno.toUpperCase() === nombreUpper) {
+                const notaVal = parseFloat(r.nota) || 0;
+                tablaCal.innerHTML += `<tr><td>${r.taller_numero || 'Taller'}</td><td>${notaVal}</td></tr>`;
+                suma += notaVal; cant++;
+            }
+        });
+
         document.getElementById("promedio-general").textContent = cant > 0 ? (suma / cant).toFixed(2) : 0;
-        
-        document.getElementById("formula-legal").textContent = `REGISTRO ACADÉMICO: La Dirección Académica de la "Clínica de la Convergencia" certifica que ${nombreCompleto}, matriculado/a bajo el N° ${data.legajo || data.Legajo || '-'}, ha cursado, rendido y aprobado los módulos correspondientes... Fecha: ${new Date().toLocaleDateString('es-AR')}`;
+        document.getElementById("formula-legal").textContent = `REGISTRO ACADÉMICO: El/la profesional ${nombreCompleto}, legajo ${data.legajo || '-'}, ha completado sus instancias evaluativas a la fecha.`;
     }
 
     function generarPDF() { html2pdf().from(document.getElementById('pdf-content')).save(); }
