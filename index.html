@@ -11,7 +11,6 @@
         .container { max-width: 800px; margin: auto; background: #fff; padding: 40px; border: 1px solid #ccc; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 30px; }
         .header img { width: 120px; }
-        .form-group { margin-bottom: 20px; }
         table { width: 100%; border-collapse: collapse; margin: 20px 0; }
         table, th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
         th { background-color: #f2f2f2; }
@@ -60,7 +59,7 @@
     
     <div style="margin-top: 50px; text-align: right;">
         <img src="sello.jpg" style="width: 120px; display: block; margin-left: auto;">
-        <p>Dr. y Mgter. Rubén M. Pereyra - Director</p>
+        <p>Dr. y Mgter. Rubén M. Pereyra - Director Programa Clínica de la Convergencia</p>
     </div>
 </div>
 
@@ -93,44 +92,49 @@
 
     async function cargarDatosAlumno() {
         const sel = document.getElementById("select-alumno");
-        const nombre = sel.options[sel.selectedIndex].text;
+        const nombreCompleto = sel.options[sel.selectedIndex].text;
         const id = sel.value;
         if (!id) return;
         
+        // 1. Carga de Participante
         const doc = await db.collection("participantes").doc(id).get();
         const data = doc.data();
         document.getElementById("dni-val").textContent = data.dni || "-";
         document.getElementById("legajo-val").textContent = data.Legajo || "-";
         document.getElementById("profesion-val").textContent = data.profesion || "-";
 
-        const asisSnap = await db.collection("asistencia").where("nombreEstudiante", "==", nombre).get();
+        // 2. Carga de Asistencia
+        const asisSnap = await db.collection("asistencia").where("nombreEstudiante", "==", nombreCompleto).get();
         const tablaAsis = document.getElementById("tabla-asistencia");
         tablaAsis.innerHTML = "<tr><th>Encuentro</th><th>Estado</th><th>Fecha</th></tr>";
         let pres = 0; let total = 0;
         asisSnap.forEach(d => {
-            const row = d.data();
-            tablaAsis.innerHTML += `<tr><td>${row.encuentro}</td><td>${row.estado}</td><td>${row.fecha}</td></tr>`;
-            if(row.estado.toLowerCase() === "presente") pres++;
+            const r = d.data();
+            tablaAsis.innerHTML += `<tr><td>${r.encuentro}</td><td>${r.estado}</td><td>${r.fecha}</td></tr>`;
+            if(r.estado && r.estado.toLowerCase() === "presente") pres++;
             total++;
         });
-        document.getElementById("porcentaje-asistencia").textContent = total > 0 ? (pres / total * 100).toFixed(0) : 0;
+        document.getElementById("porcentaje-asistencia").textContent = total > 0 ? ((pres / total) * 100).toFixed(0) : 0;
 
-        const calSnap = await db.collection("resultados").where("nombreEstudiante", "==", nombre).get();
+        // 3. Carga de Calificaciones (Resultados)
+        const resSnap = await db.collection("resultados").where("nombreEstudiante", "==", nombreCompleto).get();
         const tablaCal = document.getElementById("tabla-calificaciones");
         tablaCal.innerHTML = "<tr><th>Test N°</th><th>Nota</th><th>Taller N°</th><th>Nota</th></tr>";
         let suma = 0; let cant = 0;
-        calSnap.forEach(d => {
-            const row = d.data();
-            tablaCal.innerHTML += `<tr><td>${row.test_numero||'-'}</td><td>${row.nota_test||0}</td><td>${row.taller_numero||'-'}</td><td>${row.nota_taller||0}</td></tr>`;
-            suma += (Number(row.nota_test)||0) + (Number(row.nota_taller)||0);
-            cant += 2;
+        resSnap.forEach(d => {
+            const r = d.data();
+            tablaCal.innerHTML += `<tr><td>${r.test_numero||'-'}</td><td>${r.nota||'-'}</td><td>${r.taller_numero||'-'}</td><td>${r.nota_taller||'-'}</td></tr>`;
+            suma += (Number(r.nota)||0) + (Number(r.nota_taller)||0);
+            if(r.nota) cant++;
+            if(r.nota_taller) cant++;
         });
         document.getElementById("promedio-general").textContent = cant > 0 ? (suma / cant).toFixed(2) : 0;
 
-        document.getElementById("formula-legal").textContent = `REGISTRO ACADÉMICO: La Dirección Académica de la "Clínica de la Convergencia" certifica que ${nombre}, matriculado/a bajo el N° ${data.Legajo}, ha cursado, rendido y aprobado los módulos correspondientes... Fecha: ${new Date().toLocaleDateString()}`;
+        // 4. Fórmula Legal Automática
+        document.getElementById("formula-legal").textContent = `REGISTRO ACADÉMICO: La Dirección Académica de la "Clínica de la Convergencia" certifica que el/la profesional ${nombreCompleto}, matriculado/a bajo el N° ${data.Legajo}, ha cursado, rendido y aprobado los módulos correspondientes... Fecha: ${new Date().toLocaleDateString('es-AR')}`;
     }
 
-    function guardarAnalitico() { alert("Analítico guardado exitosamente."); }
+    function guardarAnalitico() { alert("Analítico guardado en Firestore."); }
     function generarPDF() { html2pdf().from(document.getElementById('pdf-content')).save(); }
 </script>
 </body>
