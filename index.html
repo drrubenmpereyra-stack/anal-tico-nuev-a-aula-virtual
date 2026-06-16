@@ -51,7 +51,7 @@
 
     <h3>Calificaciones</h3>
     <table id="tabla-calificaciones">
-        <tr><th>Test N°</th><th>Nota Test</th><th>Taller N°</th><th>Nota Taller</th></tr>
+        <tr><th>Test N°</th><th>Nota</th><th>Taller N°</th><th>Nota</th></tr>
     </table>
     <p><strong>Promedio General:</strong> <span id="promedio-general">0</span></p>
 
@@ -96,16 +96,11 @@
         const id = sel.value;
         if (!id) return;
         
-        // 1. Carga de Participante
+        // 1. Carga de Participante (Funciona OK)
         const doc = await db.collection("participantes").doc(id).get();
         const data = doc.data();
-        
-        // DEPURACIÓN EN CONSOLA (F12)
-        console.log("Datos recibidos de Firestore:", data);
-
-        // Uso de || "" para evitar errores si el campo es undefined
-        document.getElementById("dni-val").textContent = data.dni || data.DNI || "-";
-        document.getElementById("legajo-val").textContent = data.Legajo || data.legajo || "-";
+        document.getElementById("dni-val").textContent = data.dni || "-";
+        document.getElementById("legajo-val").textContent = data.legajo || "-";
         document.getElementById("profesion-val").textContent = data.profesion || "-";
 
         // 2. Carga de Asistencia
@@ -121,22 +116,28 @@
         });
         document.getElementById("porcentaje-asistencia").textContent = total > 0 ? ((pres / total) * 100).toFixed(0) : 0;
 
-        // 3. Carga de Calificaciones
-        const resSnap = await db.collection("resultados").where("nombreEstudiante", "==", nombreCompleto).get();
+        // 3. Carga de Calificaciones (Colección resultados_test)
+        const resSnap = await db.collection("resultados_test").where("nombreEstudiante", "==", nombreCompleto).get();
         const tablaCal = document.getElementById("tabla-calificaciones");
         tablaCal.innerHTML = "<tr><th>Test N°</th><th>Nota</th><th>Taller N°</th><th>Nota</th></tr>";
         let suma = 0; let cant = 0;
         resSnap.forEach(d => {
             const r = d.data();
-            tablaCal.innerHTML += `<tr><td>${r.test_numero||'-'}</td><td>${r.nota||'-'}</td><td>${r.taller_numero||'-'}</td><td>${r.nota_taller||'-'}</td></tr>`;
-            if(r.nota) { suma += Number(r.nota); cant++; }
-            if(r.nota_taller) { suma += Number(r.nota_taller); cant++; }
+            // Búsqueda flexible de campos (minúscula o mayúscula)
+            const tNum = r.test_numero || r.Test_numero || '-';
+            const tNota = r.nota || r.Nota || 0;
+            const tNumTaller = r.taller_numero || r.Taller_numero || '-';
+            const tNotaTaller = r.nota_taller || r.Nota_taller || 0;
+
+            tablaCal.innerHTML += `<tr><td>${tNum}</td><td>${tNota}</td><td>${tNumTaller}</td><td>${tNotaTaller}</td></tr>`;
+            suma += (Number(tNota)||0) + (Number(tNotaTaller)||0);
+            if(r.nota || r.Nota) cant++;
+            if(r.nota_taller || r.Nota_taller) cant++;
         });
         document.getElementById("promedio-general").textContent = cant > 0 ? (suma / cant).toFixed(2) : 0;
 
         // 4. Fórmula Legal
-        const legajoFinal = data.Legajo || data.legajo || "N/A";
-        document.getElementById("formula-legal").textContent = `REGISTRO ACADÉMICO: La Dirección Académica de la "Clínica de la Convergencia" certifica que el/la profesional ${nombreCompleto}, matriculado/a bajo el N° ${legajoFinal}, ha cursado, rendido y aprobado los módulos correspondientes... Fecha: ${new Date().toLocaleDateString('es-AR')}`;
+        document.getElementById("formula-legal").textContent = `REGISTRO ACADÉMICO: La Dirección Académica de la "Clínica de la Convergencia" certifica que el/la profesional ${nombreCompleto}, matriculado/a bajo el N° ${data.legajo || '-'}, ha cursado, rendido y aprobado los módulos correspondientes... Fecha: ${new Date().toLocaleDateString('es-AR')}`;
     }
 
     function guardarAnalitico() { alert("Analítico guardado en Firestore."); }
